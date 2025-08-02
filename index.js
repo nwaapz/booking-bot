@@ -148,4 +148,34 @@ app.get('/bookings/:discordId', (req, res) => {
   if (b.length === 0) return res.status(404).json({ error: '❌ No bookings for today.' });
   res.json({ discordId: userId, date: today, bookings: b, slotLength: SLOT_LENGTH });
 });
+
+
+// Add this **after** your existing GET /bookings/:discordId route, but before app.listen()
+
+/**
+ * DELETE /bookings/:discordId/today
+ * Clears all bookings for the given Discord ID for today.
+ */
+app.delete('/bookings/:discordId/today', (req, res) => {
+  const userId = req.params.discordId;
+  const today  = new Date().toISOString().split('T')[0];
+  const all    = loadBookings();
+
+  if (!all[userId] || !all[userId][today]) {
+    return res.status(404).json({ error: '❌ No bookings to clear for today.' });
+  }
+
+  // Clear today's sessions for this user
+  all[userId][today] = [];
+  saveBookings(all);
+
+  return res.json({
+    success: true,
+    message: `✅ Cleared all bookings for ${userId} on ${today}.`
+  });
+});
+
+
+
+
 app.listen(PORT, () => console.log(`🌐 Booking API at http://localhost:${PORT}`));
