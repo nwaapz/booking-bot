@@ -8,6 +8,7 @@ const {
 } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
+const cors = require('cors');
 const express = require('express');
 
 const TOKEN          = process.env.DISCORD_TOKEN;
@@ -138,6 +139,7 @@ client.login(TOKEN);
 
 // Express API
 const app = express();
+app.use(cors());  // allow all origins
 const PORT = process.env.PORT || 3000;
 app.get('/bookings/:discordId', (req, res) => {
   const userId = req.params.discordId;
