@@ -14,9 +14,8 @@ const {
   EmbedBuilder
 } = require('discord.js');
 
-const { handleBookButton, handleBookSelect } = require('./bookingFlow');
+const { handleBookButton, handleBookSelect, tempBookings } = require('./bookingFlow');
 
-// === CONFIG ===
 const TOKEN = process.env.DISCORD_TOKEN;
 const CHANNEL_ID = process.env.CHANNEL_ID;
 const BOOKINGS_FILE = path.join(__dirname, 'bookings.json');
@@ -126,11 +125,11 @@ client.on(Events.InteractionCreate, async interaction => {
         const label = `• <t:${unixSt}:t> – <t:${unixEn}:t>${labelPrefix}`;
 
         if (new Date().getTime() > en.getTime()) {
-          expired.push(`[**Expired**] ${label}`);
+          expired.push(`🔴 **Expired:** ${label}`);
         } else if (new Date().getTime() >= st.getTime()) {
-          openNow.push(`[**Open Now**] ${label}`);
+          openNow.push(`🟢 **Open Now:** ${label}`);
         } else {
-          upcoming.push(`[**Upcoming**] ${label}`);
+          upcoming.push(`🟡 **Upcoming:** ${label}`);
         }
       });
     };
@@ -138,9 +137,7 @@ client.on(Events.InteractionCreate, async interaction => {
     formatSessions(todaySessions, todayKey, '');
     formatSessions(tomorrowSessions, tomorrowKey, ` on ${tomorrowKey}`);
 
-    let content = `📋 Your **${gameKey}** bookings:
-
-`;
+    let content = `📋 Your **${gameKey}** bookings:\n\n`;
     if (openNow.length) content += openNow.join('\n') + '\n';
     if (upcoming.length) content += upcoming.join('\n') + '\n';
     if (expired.length) content += expired.join('\n') + '\n';
@@ -152,17 +149,46 @@ client.on(Events.InteractionCreate, async interaction => {
   }
 
   if (action === 'confirm') {
-    const time = args[1];
-    const dateKey = args[2];
-    const [h, m, s] = time.split(':').map(Number);
-    const [y, mm, d] = dateKey.split('-').map(Number);
-    const st = new Date(y, mm - 1, d, h, m, s);
+    const userId = interaction.user.id;
+    const key = `${userId}_${gameKey}`;
+    const record = tempBookings.get(key);
+
+    if (!record || Date.now() > record.expiresAt) {
+      return interaction.update({
+        content: '❌ Your selection expired or was not found. Please pick a new time.',
+        components: []
+      });
+    }
+
+    const { time, dateKey } = record;
+    const [hh, mm, ss] = time.split(':').map(Number);
+    const [yy, mo, dd] = dateKey.split('-').map(Number);
+    const st = new Date(yy, mo - 1, dd, hh, mm, ss);
     const en = new Date(st.getTime() + SLOT_LENGTH * 60000);
     const us = Math.floor(st.getTime() / 1000);
     const ue = Math.floor(en.getTime() / 1000);
 
+    const all = loadBookings();
+    if (!all[userId]) all[userId] = {};
+    if (!all[userId][dateKey]) all[userId][dateKey] = {};
+    if (!all[userId][dateKey][gameKey]) all[userId][dateKey][gameKey] = [];
+    all[userId][dateKey][gameKey].push(time);
+    saveBookings(all);
+    tempBookings.delete(key);
+
     return interaction.update({
       content: `✅ Confirmed your ${gameKey} booking for **${dateKey}**: <t:${us}:t> – <t:${ue}:t>`,
+      components: []
+    });
+  }
+
+  if (action === 'cancel') {
+    const userId = interaction.user.id;
+    const key = `${userId}_${gameKey}`;
+    if (tempBookings.has(key)) tempBookings.delete(key);
+
+    return interaction.update({
+      content: `❌ Booking for ${gameKey} was canceled.`,
       components: []
     });
   }
